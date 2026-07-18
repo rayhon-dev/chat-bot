@@ -10,6 +10,7 @@ from .generation import generate_answer
 import PyPDF2
 import docx
 import io
+from .embeddings import get_embeddings_batch
 
 @api_view(['POST'])
 def upload_document(request):
@@ -25,6 +26,7 @@ def upload_document(request):
     document = Document.objects.create(file=file_obj, title=file_obj.name)
 
     # 2. Fayl matnini o'qish
+    file_obj.seek(0)  
     text = extract_text(file_obj)
 
     # 3. Chunklash
@@ -35,14 +37,16 @@ def upload_document(request):
     collection_name = f"doc_{document.id}"
     create_collection(collection_name=collection_name)
 
-    data = []
-    for i, chunk in enumerate(chunks):
-        vector = get_embedding(chunk)
-        data.append({"id": i, "vector": vector, "text": chunk})
+    vectors = get_embeddings_batch(chunks, batch_size=100)
+    data = [
+       {"id": i, "vector": vectors[i], "text": chunks[i]}
+       for i in range(len(chunks))
+    ]
 
     insert_chunks(data, collection_name=collection_name)
 
     document.processed = True
+    document.chunk_count = len(chunks)
     document.save()
 
     return Response({
@@ -53,11 +57,22 @@ def upload_document(request):
     })
 
 
+def calculate_top_k(chunk_count):
+    """
+    Fayl hajmiga qarab qancha chunk qidirish kerakligini hisoblaydi.
+    Kichik fayl uchun kam, katta fayl uchun ko'proq chunk oladi.
+    """
+    if chunk_count <= 20:
+        return 3
+    elif chunk_count <= 100:
+        return 5
+    elif chunk_count <= 500:
+        return 8
+    else:
+        return 12
+
 @api_view(['POST'])
 def ask_question(request):
-    """
-    Savol-javob endpoint'i.
-    """
     document_id = request.data.get('document_id')
     question = request.data.get('question')
 
@@ -70,20 +85,21 @@ def ask_question(request):
         return Response({"error": "Document topilmadi"}, status=status.HTTP_404_NOT_FOUND)
 
     collection_name = f"doc_{document.id}"
+    top_k = calculate_top_k(document.chunk_count)
 
     question_vector = get_embedding(question)
-    results = search(question_vector, collection_name=collection_name, top_k=3)
+    results = search(question_vector, collection_name=collection_name, top_k=top_k)
     context_chunks = [hit['entity']['text'] for hit in results[0]]
 
     answer = generate_answer(question, context_chunks)
 
-    # Suhbat tarixini saqlash
     ChatMessage.objects.create(document=document, question=question, answer=answer)
 
     return Response({
         "question": question,
         "answer": answer
     })
+        
 
 
 def chat_page(request):
@@ -112,3 +128,33 @@ def extract_text(file_obj):
 
     else:
         raise ValueError("Faqat .txt, .pdf, .docx fayllar qo'llab-quvvatlanadi")
+
+
+@api_view(['GET'])
+def list_documents(request):
+    """
+    Barcha yuklangan fayllar ro'yxatini qaytaradi.
+    """
+    documents = Document.objects.all().order_by('-uploaded_at')
+    data = [
+        {
+            "id": doc.id,
+            "title": doc.title,
+            "uploaded_at": doc.uploaded_at.strftime("%Y-%m-%d %H:%M")
+        }
+        for doc in documents
+    ]
+    return Response(data)
+
+
+@api_view(['GET'])
+def get_messages(request, document_id):
+    """
+    Berilgan fayl uchun suhbat tarixini qaytaradi.
+    """
+    messages = ChatMessage.objects.filter(document_id=document_id).order_by('created_at')
+    data = [
+        {"question": m.question, "answer": m.answer}
+        for m in messages
+    ]
+    return Response(data)

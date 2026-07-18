@@ -6,6 +6,7 @@ class Document(models.Model):
     title = models.CharField(max_length=255, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     processed = models.BooleanField(default=False)
+    chunk_count = models.IntegerField(default=0)
 
     def __str__(self):
         return self.title or self.file.name

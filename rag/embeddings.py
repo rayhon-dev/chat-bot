@@ -18,6 +18,25 @@ def get_embedding(text):
     return response.data[0].embedding
 
 
+
+
+def get_embeddings_batch(texts, batch_size=100):
+    """
+    Bir nechta matnni bitta so'rovda embedding qiladi (tezroq).
+    """
+    all_embeddings = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        response = client.embeddings.create(
+            input=batch,
+            model="text-embedding-3-small"
+        )
+        batch_embeddings = [item.embedding for item in response.data]
+        all_embeddings.extend(batch_embeddings)
+        print(f"Batch {i // batch_size + 1}: {len(batch)} ta chunk embedding qilindi")
+    return all_embeddings
+
+
 if __name__ == "__main__":
     # Test qilish uchun
     test_text = "Python - mashhur dasturlash tili."
