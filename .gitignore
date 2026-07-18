@@ -1,0 +1,43 @@
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Environment variables (API kalitlar shu yerda bo'ladi!)
+.env
+.env.local
+
+# PyCharm
+.idea/
+
+# VS Code (agar ba'zan ochsang ham)
+.vscode/
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Milvus local database fayli
+*.db
+milvus_data/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/cache
+.pytest_cache/
+.coverage
