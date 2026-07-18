@@ -41,3 +41,15 @@ Thumbs.db
 # Test/cache
 .pytest_cache/
 .coverage
+
+
+# Milvus va Docker ma'lumotlar ombori
+volumes/
+
+# Python kesh fayllari
+__pycache__/
+*.pyc
+.env
+
+# Virtual muhit
+venv/

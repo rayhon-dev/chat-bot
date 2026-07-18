@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <title>RAG Chatbot</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+            max-width: 720px;
+            margin: 30px auto;
+            padding: 0 20px;
+            background: #f4f6f8;
+            color: #1a1a1a;
+        }
+        h2 {
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .upload-card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        input[type="file"] {
+            font-size: 13px;
+        }
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        button:hover { background: #4338ca; }
+
+        #status {
+            font-size: 13px;
+            color: #16a34a;
+            margin: 0;
+            width: 100%;
+        }
+
+        #chat-box {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            height: 420px;
+            overflow-y: auto;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 16px;
+        }
+        .message { margin-bottom: 16px; display: flex; }
+        .message.user { justify-content: flex-end; }
+        .bubble {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .message.user .bubble {
+            background: #4f46e5;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .message.bot .bubble {
+            background: #f1f3f5;
+            color: #1a1a1a;
+            border-bottom-left-radius: 4px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        #question-input {
+            flex: 1;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        #question-input:focus {
+            outline: none;
+            border-color: #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <h2>🤖 RAG Chatbot</h2>
+
+    <div class="upload-card">
+        <input type="file" id="file-input">
+        <button onclick="uploadFile()">Fayl yuklash</button>
+        <p id="status"></p>
+    </div>
+
+    <div id="chat-box"></div>
+
+    <div class="input-row">
+        <input type="text" id="question-input" placeholder="Savolingizni yozing..." onkeypress="if(event.key==='Enter') askQuestion()">
+        <button onclick="askQuestion()">Yuborish</button>
+    </div>
+
+    <script>
+        let documentId = null;
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert("Avval fayl tanlang!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            document.getElementById('status').innerText = "⏳ Yuklanmoqda...";
+
+            const response = await fetch('/api/upload/', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            documentId = data.document_id;
+            document.getElementById('status').innerText =
+                `✅ "${data.title}" tayyor — ${data.chunks_count} ta chunk`;
+        }
+
+        async function askQuestion() {
+            const input = document.getElementById('question-input');
+            const question = input.value.trim();
+            if (!question) return;
+
+            if (!documentId) {
+                alert("Avval fayl yuklang!");
+                return;
+            }
+
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML += `
+                <div class="message user">
+                    <div class="bubble">${question}</div>
+                </div>`;
+            input.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const response = await fetch('/api/ask/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ document_id: documentId, question: question })
+            });
+            const data = await response.json();
+
+            chatBox.innerHTML += `
+                <div class="message bot">
+                    <div class="bubble">${data.answer}</div>
+                </div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    </script>
+</body>
+</html>
