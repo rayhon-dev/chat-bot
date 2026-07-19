@@ -15,26 +15,17 @@ from langdetect import detect
 
 @api_view(['POST'])
 def upload_document(request):
-    """
-    Fayl yuklash endpoint'i.
-    Fayl kelganda: saqlaydi -> chunklaydi -> embedding qiladi -> Milvus'ga yozadi
-    """
     file_obj = request.FILES.get('file')
     if not file_obj:
         return Response({"error": "Fayl topilmadi"}, status=status.HTTP_400_BAD_REQUEST)
 
-    # 1. Document sifatida saqlash
     document = Document.objects.create(file=file_obj, title=file_obj.name)
 
-    # 2. Fayl matnini o'qish
-    file_obj.seek(0)  
+    file_obj.seek(0)
     text = extract_text(file_obj)
 
-    # 3. Chunklash
     chunks = chunk_text(text, chunk_size=1200, overlap=200)
 
-    # 4. Har chunk uchun embedding va Milvus'ga tayyorlash
-    # Har bir document uchun alohida collection nomi ishlatamiz
     collection_name = f"doc_{document.id}"
     create_collection(collection_name=collection_name)
 
@@ -59,10 +50,6 @@ def upload_document(request):
 
 
 def calculate_top_k(chunk_count):
-    """
-    Fayl hajmiga qarab qancha chunk qidirish kerakligini hisoblaydi.
-    Kichik fayl uchun kam, katta fayl uchun ko'proq chunk oladi.
-    """
     if chunk_count <= 20:
         return 3
     elif chunk_count <= 100:
@@ -121,9 +108,6 @@ def chat_page(request):
     return render(request, 'rag/chat.html')
 
 def extract_text(file_obj):
-    """
-    Fayl kengaytmasiga qarab matnni ajratib oladi.
-    """
     filename = file_obj.name.lower()
 
     if filename.endswith('.txt'):
@@ -147,9 +131,6 @@ def extract_text(file_obj):
 
 @api_view(['GET'])
 def list_documents(request):
-    """
-    Barcha yuklangan fayllar ro'yxatini qaytaradi.
-    """
     documents = Document.objects.all().order_by('-uploaded_at')
     data = [
         {
@@ -164,9 +145,6 @@ def list_documents(request):
 
 @api_view(['GET'])
 def get_messages(request, document_id):
-    """
-    Berilgan fayl uchun suhbat tarixini qaytaradi.
-    """
     messages = ChatMessage.objects.filter(document_id=document_id).order_by('created_at')
     data = [
         {"question": m.question, "answer": m.answer}
@@ -178,9 +156,6 @@ def get_messages(request, document_id):
 
 @api_view(['DELETE'])
 def delete_document(request, document_id):
-    """
-    Faylni va uning Milvus collection'ini o'chiradi.
-    """
     try:
         document = Document.objects.get(id=document_id)
     except Document.DoesNotExist:

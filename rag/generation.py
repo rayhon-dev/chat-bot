@@ -9,9 +9,6 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 def generate_answer(question, context_chunks):
-    """
-    Topilgan chunklar asosida savolga javob generatsiya qiladi.
-    """
     context_text = "\n\n".join(context_chunks)
 
     try:
