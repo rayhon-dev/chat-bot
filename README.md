@@ -126,13 +126,3 @@ Inglizcha hujjatga o'zbekcha savol berilganda, ba'zan kerakli ma'lumot topilmadi
 
 Fayl parsing paytida `Document.objects.create()` faylni to'liq o'qib chiqqani uchun, keyingi `extract_text()` chaqiruvi bo'sh natija qaytargan. `file_obj.seek(0)` bilan hal qilindi.
 
-## Bilingan cheklovlar
-
-- Struktura/xulosa talab qiladigan savollarda aniqlik pastroq (RAG'ning tabiiy cheklovi)
-- Hozircha faqat vector search ishlatiladi — keyword search bilan birlashtirish (hybrid search) rejalashtirilgan, lekin amalga oshirilmagan
-- Milvus Windows'da to'g'ridan-to'g'ri ishlamaydi, WSL2 talab qilinadi
-
-## Keyingi bosqichlar
-
-- Hybrid search (vector + keyword) qo'shish — "Frankenstein" kabi ko'p takrorlanadigan so'zlar muammosini yanada kamaytirish uchun
-- Suhbat tarixini kontekstga qo'shib, ketma-ket savollarni yaxshiroq tushunish
