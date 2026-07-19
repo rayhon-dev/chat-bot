@@ -1,9 +1,11 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from langdetect import detect
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 
 def generate_answer(question, context_chunks):
@@ -12,13 +14,28 @@ def generate_answer(question, context_chunks):
     """
     context_text = "\n\n".join(context_chunks)
 
-    system_prompt = """Sen faqat berilgan kontekst asosida javob beruvchi yordamchisan.
+    try:
+        lang_code = detect(question)
+    except Exception:
+        lang_code = "uz"
 
-QOIDALAR:
+    lang_map = {
+        "en": "ingliz (English)",
+        "uz": "o'zbek",
+        "ru": "rus (Russian)",
+    }
+    target_language = lang_map.get(lang_code, "o'zbek")
+
+    system_prompt = f"""Sen faqat berilgan kontekst asosida javob beruvchi yordamchisan.
+
+TIL BO'YICHA QAT'IY BUYRUQ:
+Javobni FAQAT {target_language} tilida yoz. Boshqa tilda bironta ham so'z yozma.
+
+QOLGAN QOIDALAR:
 1. Faqat pastda berilgan kontekstdagi ma'lumotdan foydalan
-2. Agar javob kontekstda bo'lmasa, aniq shunday de: "Bu ma'lumot yuklangan hujjatlarda topilmadi"
-3. O'zingning umumiy bilimingdan hech narsa qo'shma
-4. Javobni o'zbek tilida, aniq va qisqa yoz
+2. Agar kontekstda savolga to'g'ridan-to'g'ri yoki bilvosita tegishli ma'lumot bo'lsa, shu asosida javob ber
+3. Faqat kontekst savolga umuman aloqasi bo'lmasa, mos tilda "bu ma'lumot topilmadi" turidagi javob ber
+4. O'zingning umumiy bilimingdan hech narsa qo'shma, faqat berilgan kontekstni talqin qil
 """
 
     user_prompt = f"""Kontekst:

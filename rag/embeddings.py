@@ -18,6 +18,19 @@ def get_embedding(text):
     return response.data[0].embedding
 
 
+def translate_to_english(text):
+    """
+    Matnni ingliz tiliga tarjima qiladi — qidiruv sifatini oshirish uchun.
+    """
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Translate the following text to English. Only return the translation, nothing else, no explanations."},
+            {"role": "user", "content": text}
+        ]
+    )
+    return response.choices[0].message.content
+
 
 
 def get_embeddings_batch(texts, batch_size=100):

@@ -4,13 +4,14 @@ from rest_framework import status
 from django.shortcuts import render
 from .models import Document, ChatMessage
 from .chunking import chunk_text
-from .embeddings import get_embedding
+from .embeddings import get_embedding, translate_to_english
 from .milvus_client import create_collection, insert_chunks, search
 from .generation import generate_answer
 import PyPDF2
 import docx
 import io
 from .embeddings import get_embeddings_batch
+from langdetect import detect
 
 @api_view(['POST'])
 def upload_document(request):
@@ -30,7 +31,7 @@ def upload_document(request):
     text = extract_text(file_obj)
 
     # 3. Chunklash
-    chunks = chunk_text(text, chunk_size=500, overlap=50)
+    chunks = chunk_text(text, chunk_size=1200, overlap=200)
 
     # 4. Har chunk uchun embedding va Milvus'ga tayyorlash
     # Har bir document uchun alohida collection nomi ishlatamiz
@@ -65,11 +66,11 @@ def calculate_top_k(chunk_count):
     if chunk_count <= 20:
         return 3
     elif chunk_count <= 100:
-        return 5
+        return 6
     elif chunk_count <= 500:
-        return 8
-    else:
         return 12
+    else:
+        return 25
 
 @api_view(['POST'])
 def ask_question(request):
@@ -86,10 +87,24 @@ def ask_question(request):
 
     collection_name = f"doc_{document.id}"
     top_k = calculate_top_k(document.chunk_count)
+    
+    try:
+        lang_code = detect(question)
+    except Exception:
+        lang_code = "uz"
+
+    search_query = question
+    if lang_code != "en":
+        search_query = translate_to_english(question)
 
     question_vector = get_embedding(question)
     results = search(question_vector, collection_name=collection_name, top_k=top_k)
     context_chunks = [hit['entity']['text'] for hit in results[0]]
+    print(f"\n--- SAVOL: {question} ---")
+    print(f"--- TOP_K: {top_k} ---")
+    for i, c in enumerate(context_chunks):
+        print(f"Chunk {i+1}: {c[:150]}...")
+    print("-------------------------\n")
 
     answer = generate_answer(question, context_chunks)
 
@@ -158,3 +173,26 @@ def get_messages(request, document_id):
         for m in messages
     ]
     return Response(data)
+
+
+
+@api_view(['DELETE'])
+def delete_document(request, document_id):
+    """
+    Faylni va uning Milvus collection'ini o'chiradi.
+    """
+    try:
+        document = Document.objects.get(id=document_id)
+    except Document.DoesNotExist:
+        return Response({"error": "Document topilmadi"}, status=status.HTTP_404_NOT_FOUND)
+
+    collection_name = f"doc_{document.id}"
+
+    from .milvus_client import client as milvus_client
+    if milvus_client.has_collection(collection_name=collection_name):
+        milvus_client.drop_collection(collection_name=collection_name)
+
+    document.file.delete(save=False)
+    document.delete()
+
+    return Response({"message": "Fayl o'chirildi"})

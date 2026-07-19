@@ -65,16 +65,38 @@
             cursor: pointer;
             color: #a1a1aa;
             border: 1px solid transparent;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
             transition: all 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
         }
         .doc-item:hover { background: #1f1f27; color: #e4e4e7; }
         .doc-item.active {
             background: rgba(99,102,241,0.12);
             border-color: rgba(99,102,241,0.4);
             color: #c7d2fe;
+        }
+        .doc-item-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        .doc-delete-btn {
+            background: none;
+            border: none;
+            color: #71717a;
+            cursor: pointer;
+            font-size: 15px;
+            padding: 2px 6px;
+            border-radius: 6px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .doc-delete-btn:hover {
+            color: #f87171;
+            background: rgba(248,113,113,0.1);
         }
         #upload-status {
             font-size: 12px;
@@ -210,8 +232,22 @@
             documents.forEach(doc => {
                 const el = document.createElement('div');
                 el.className = 'doc-item' + (doc.id === currentDocId ? ' active' : '');
-                el.textContent = doc.title;
-                el.onclick = () => selectDocument(doc.id, doc.title);
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'doc-item-name';
+                nameSpan.textContent = doc.title;
+                nameSpan.onclick = () => selectDocument(doc.id, doc.title);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'doc-delete-btn';
+                deleteBtn.textContent = '✕';
+                deleteBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    deleteDocument(doc.id);
+                };
+
+                el.appendChild(nameSpan);
+                el.appendChild(deleteBtn);
                 listEl.appendChild(el);
             });
         }
@@ -238,6 +274,22 @@
                 });
             }
             chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function deleteDocument(docId) {
+            if (!confirm("Bu faylni o'chirmoqchimisiz?")) return;
+
+            await fetch(`/api/documents/${docId}/`, { method: 'DELETE' });
+
+            if (docId === currentDocId) {
+                currentDocId = null;
+                document.getElementById('chat-header').innerText = 'Fayl tanlanmagan';
+                document.getElementById('chat-box').innerHTML = '<div class="empty-state">Chapdan fayl tanlang yoki yangi fayl yuklang</div>';
+                document.getElementById('question-input').disabled = true;
+                document.getElementById('send-btn').disabled = true;
+            }
+
+            await loadDocuments();
         }
 
         function appendMessage(text, type) {
