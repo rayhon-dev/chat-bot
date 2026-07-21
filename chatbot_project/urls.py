@@ -18,12 +18,10 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from rag.views import chat_page
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('rag.urls')),
-    path('', chat_page, name='chat_page'),
+    path("adapters/", include("adapters.urls")),
 ]
 
 if settings.DEBUG:
