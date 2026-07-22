@@ -13,7 +13,11 @@ def get_client():
 def ensure_collection(collection_name, dimension):
     client = get_client()
     if not client.has_collection(collection_name=collection_name):
-        client.create_collection(collection_name=collection_name, dimension=dimension)
+        client.create_collection(
+            collection_name=collection_name,
+            dimension=dimension,
+            metric_type="COSINE",
+        )
 
 
 def insert_vectors(collection_name, entries):
