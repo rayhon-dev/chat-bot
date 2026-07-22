@@ -8,9 +8,19 @@ from django.views.decorators.http import require_POST
 from clients.models import Bot
 from conversations.models import Conversation, Message
 from rag.services.chat import get_bot_response
+from rag.services.relevance import is_message_relevant
 from .sender import send_message, send_chat_action
 
 logger = logging.getLogger(__name__)
+
+
+@csrf_exempt
+@require_POST
+def telegram_webhook(request, bot_id):
+    logger.warning(f"WEBHOOK CHAQIRILDI: bot_id={bot_id}, body={request.body[:500]}")
+
+    bot = _get_active_bot(bot_id)
+    ...
 
 
 def _get_active_bot(bot_id):
@@ -20,10 +30,6 @@ def _get_active_bot(bot_id):
 
 
 def _parse_telegram_message(data):
-    """
-    Telegram'dan kelgan JSON'dan kerakli maydonlarni ajratib oladi.
-    Agar xabar mavjud bo'lmasa (masalan boshqa turdagi update), None qaytaradi.
-    """
     message = data.get("message")
     if not message or "text" not in message:
         return None
@@ -36,6 +42,7 @@ def _parse_telegram_message(data):
         "chat_type": "group" if chat.get("type") in ("group", "supergroup") else "private",
         "text": message["text"],
         "sender_user_id": str(from_user.get("id", "")),
+        "message_id": message.get("message_id"),
     }
 
 
@@ -84,12 +91,17 @@ def telegram_webhook(request, bot_id):
     chat_id = parsed["chat_id"]
     chat_type = parsed["chat_type"]
     text = parsed["text"]
+    message_id = parsed["message_id"]
 
     if chat_type == "group" and not bot.telegram_group_mode:
         return JsonResponse({"ok": True})
 
     if _handle_command(bot, chat_id, text):
         return JsonResponse({"ok": True})
+
+    if chat_type == "group" and bot.uses_rag:
+        if not is_message_relevant(bot, text):
+            return JsonResponse({"ok": True})
 
     conversation = _get_or_create_conversation(bot, chat_id, chat_type)
 
@@ -114,6 +126,7 @@ def telegram_webhook(request, bot_id):
         content=answer,
     )
 
-    send_message(bot.telegram_bot_token, chat_id, answer)
+    reply_id = message_id if chat_type == "group" else None
+    send_message(bot.telegram_bot_token, chat_id, answer, reply_to_message_id=reply_id)
 
     return JsonResponse({"ok": True})

@@ -23,5 +23,5 @@ class BotAdmin(admin.ModelAdmin):
             "uses_rag", "api_key_source", "llm_provider", "llm_model",
             "embedding_model", "milvus_collection_name", "temperature",
         )}),
-        ("Xulq-atvor", {"fields": ("system_prompt", "welcome_message", "fallback_message")}),
+        ("Xulq-atvor", {"fields": ("system_prompt", "welcome_message", "fallback_message", "relevance_criteria")}),
     )

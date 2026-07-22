@@ -30,6 +30,10 @@ class Bot(models.Model):
     telegram_enabled = models.BooleanField(default=False)
     telegram_bot_token = models.CharField(max_length=255, blank=True, null=True)
     telegram_group_mode = models.BooleanField(default=False)
+    relevance_criteria = models.TextField(
+        blank=True,
+        help_text="Guruhda qaysi mavzudagi savollarga javob berish kerakligini tavsiflang. Masalan: 'mahsulot narxi, yetkazib berish, mavjudligi haqida savollar'"
+    )
     website_enabled = models.BooleanField(default=False)
     api_key = models.CharField(max_length=255, unique=True, blank=True, null=True)
     uses_rag = models.BooleanField(default=True)
