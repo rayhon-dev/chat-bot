@@ -1,5 +1,6 @@
 import tempfile
 import os
+
 from ..models import Chunk
 from .parser import extract_text_with_pages
 from .chunker import chunk_pages
@@ -8,68 +9,101 @@ from .dynamic_params import calculate_chunk_params
 from rag.services.milvus_client import ensure_collection, insert_vectors
 
 
+def _save_temp_file(document):
+    file_extension = os.path.splitext(document.original_filename)[1]
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp:
+        with document.file.open('rb') as source_file:
+            tmp.write(source_file.read())
+        return tmp.name
+
+
+def _extract_and_chunk(tmp_path, document):
+    try:
+        pages = extract_text_with_pages(tmp_path, document.original_filename)
+    finally:
+        os.unlink(tmp_path)
+
+    total_length = sum(len(text) for text, _ in pages)
+    params = calculate_chunk_params(total_length)
+
+    chunks_with_pages = chunk_pages(
+        pages,
+        chunk_size=params["chunk_size"],
+        overlap=params["overlap"],
+    )
+
+    if not chunks_with_pages:
+        raise ValueError("Fayldan matn ajratib bo'lmadi (bo'sh natija)")
+
+    return chunks_with_pages, params
+
+
+def _get_or_create_collection_name(bot):
+    if bot.milvus_collection_name:
+        return bot.milvus_collection_name
+
+    collection_name = f"bot_{bot.id}"
+    bot.milvus_collection_name = collection_name
+    bot.save(update_fields=["milvus_collection_name"])
+    return collection_name
+
+
+def _save_chunks_and_vectors(document, bot, chunks_with_pages, vectors, collection_name):
+    starting_id = Chunk.objects.filter(document__bot=bot).count()
+
+    milvus_entries = []
+    for index, (chunk_text, page_number) in enumerate(chunks_with_pages):
+        vector_id = starting_id + index
+
+        Chunk.objects.create(
+            document=document,
+            chunk_text=chunk_text,
+            chunk_index=index,
+            page_number=page_number,
+            milvus_vector_id=str(vector_id),
+        )
+
+        milvus_entries.append({"id": vector_id, "vector": vectors[index]})
+
+    insert_vectors(collection_name, milvus_entries)
+
+
+def _maybe_update_bot_top_k(bot, recommended_top_k):
+    if recommended_top_k > bot.default_top_k:
+        bot.default_top_k = recommended_top_k
+        bot.save(update_fields=["default_top_k"])
+
+
 def process_document(document):
     bot = document.bot
+
     document.status = "processing"
     document.save(update_fields=["status"])
 
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(document.original_filename)[1]) as tmp:
-            with document.file.open('rb') as f:
-                tmp.write(f.read())
-            tmp_path = tmp.name
+        tmp_path = _save_temp_file(document)
+        chunks_with_pages, params = _extract_and_chunk(tmp_path, document)
 
-        try:
-            pages = extract_text_with_pages(tmp_path, document.original_filename)
-        finally:
-            os.unlink(tmp_path)
-
-        full_text_length = sum(len(p[0]) for p in pages)
-        params = calculate_chunk_params(full_text_length)
-
-        chunks_with_pages = chunk_pages(pages, chunk_size=params["chunk_size"], overlap=params["overlap"])
-        chunk_texts = [c[0] for c in chunks_with_pages]
-
-        if not chunk_texts:
-            raise ValueError("Fayldan matn ajratib bo'lmadi (bo'sh natija)")
+        chunk_texts = [text for text, _ in chunks_with_pages]
 
         model = get_embedding_model(bot)
         dimension = EMBEDDING_DIMENSIONS.get(model, 1536)
-
-        collection_name = bot.milvus_collection_name or f"bot_{bot.id}"
-        if not bot.milvus_collection_name:
-            bot.milvus_collection_name = collection_name
-            bot.save(update_fields=["milvus_collection_name"])
+        collection_name = _get_or_create_collection_name(bot)
 
         ensure_collection(collection_name, dimension)
 
         vectors = get_embeddings_batch(bot, chunk_texts, batch_size=100)
 
-        last_id = Chunk.objects.filter(document__bot=bot).count()
+        _save_chunks_and_vectors(document, bot, chunks_with_pages, vectors, collection_name)
 
-        milvus_entries = []
-        for i, (chunk_text_value, page_number) in enumerate(chunks_with_pages):
-            vector_id = last_id + i
-            Chunk.objects.create(
-                document=document,
-                chunk_text=chunk_text_value,
-                chunk_index=i,
-                page_number=page_number,
-                milvus_vector_id=str(vector_id),
-            )
-            milvus_entries.append({"id": vector_id, "vector": vectors[i]})
-
-        insert_vectors(collection_name, milvus_entries)
-
-        document.chunk_count = len(chunks_with_pages)
         document.status = "ready"
-        document.save(update_fields=["status", "chunk_count"] if hasattr(document, "chunk_count") else ["status"])
+        document.chunk_count = len(chunks_with_pages)
+        document.save(update_fields=["status", "chunk_count"])
+
+        _maybe_update_bot_top_k(bot, params["top_k"])
 
     except Exception as e:
         document.status = "failed"
         document.save(update_fields=["status"])
         raise e
-
-    if params["top_k"] > bot.default_top_k:
-        bot.default_top_k = params["top_k"]
-        bot.save(update_fields=["default_top_k"])

@@ -1,6 +1,4 @@
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
-import tempfile
-import os
 
 
 def extract_text_with_pages(file_path, filename):
