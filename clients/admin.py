@@ -25,3 +25,6 @@ class BotAdmin(admin.ModelAdmin):
         )}),
         ("Xulq-atvor", {"fields": ("system_prompt", "welcome_message", "fallback_message", "relevance_criteria")}),
     )
+
+    class Media:
+        js = ("admin/js/bot_llm_model_choices.js",)

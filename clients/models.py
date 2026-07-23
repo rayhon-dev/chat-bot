@@ -18,6 +18,7 @@ class Bot(models.Model):
         OPENAI = "openai", "OpenAI"
         GEMINI = "gemini", "Gemini"
         ANTHROPIC = "anthropic", "Anthropic (Claude)"
+        DEEPSEEK = "deepseek", "DeepSeek"
 
     class ApiKeySource(models.TextChoices):
         PLATFORM = "platform", "Platforma key"
@@ -44,11 +45,6 @@ class Bot(models.Model):
     embedding_model = models.CharField(max_length=100, blank=True, null=True)
     milvus_collection_name = models.CharField(max_length=255, blank=True, null=True)
     temperature = models.FloatField(default=0.7)
-    similarity_threshold = models.FloatField(
-        default=0.3,
-        help_text="0 dan 1 gacha. Past qiymat = ko'proq natija qabul qilinadi."
-    )
-    default_top_k = models.IntegerField(default=8)
     system_prompt = models.TextField(blank=True)
     welcome_message = models.CharField(max_length=500, blank=True)
     fallback_message = models.CharField(max_length=500, blank=True)

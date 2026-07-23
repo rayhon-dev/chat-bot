@@ -1,26 +1,14 @@
 import json
 import logging
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-
 from clients.models import Bot
 from conversations.models import Conversation, Message
 from rag.services.chat import get_bot_response
-from rag.services.relevance import is_message_relevant
 from .sender import send_message, send_chat_action
 
 logger = logging.getLogger(__name__)
-
-
-@csrf_exempt
-@require_POST
-def telegram_webhook(request, bot_id):
-    logger.warning(f"WEBHOOK CHAQIRILDI: bot_id={bot_id}, body={request.body[:500]}")
-
-    bot = _get_active_bot(bot_id)
-    ...
 
 
 def _get_active_bot(bot_id):
@@ -99,10 +87,6 @@ def telegram_webhook(request, bot_id):
     if _handle_command(bot, chat_id, text):
         return JsonResponse({"ok": True})
 
-    if chat_type == "group" and bot.uses_rag:
-        if not is_message_relevant(bot, text):
-            return JsonResponse({"ok": True})
-
     conversation = _get_or_create_conversation(bot, chat_id, chat_type)
 
     Message.objects.create(
@@ -114,11 +98,16 @@ def telegram_webhook(request, bot_id):
 
     send_chat_action(bot.telegram_bot_token, chat_id, "typing")
 
+    criteria = bot.relevance_criteria if chat_type == "group" else None
+
     try:
-        answer = get_bot_response(bot, text)
+        answer = get_bot_response(bot, text, relevance_criteria=criteria)
     except Exception as e:
         logger.exception(f"Bot javob berishda xato (bot_id={bot_id}): {e}")
         answer = bot.fallback_message or "Kechirasiz, xatolik yuz berdi."
+
+    if answer is None:
+        return JsonResponse({"ok": True})
 
     Message.objects.create(
         conversation=conversation,

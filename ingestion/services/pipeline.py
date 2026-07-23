@@ -5,8 +5,8 @@ from ..models import Chunk
 from .parser import extract_text_with_pages
 from .chunker import chunk_pages
 from .embedder import get_embeddings_batch, get_embedding_model, EMBEDDING_DIMENSIONS
-from .dynamic_params import calculate_chunk_params
 from rag.services.milvus_client import ensure_collection, insert_vectors
+from rag.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 
 
 def _save_temp_file(document):
@@ -24,20 +24,16 @@ def _extract_and_chunk(tmp_path, document):
     finally:
         os.unlink(tmp_path)
 
-    total_length = sum(len(text) for text, _ in pages)
-    params = calculate_chunk_params(total_length)
-
     chunks_with_pages = chunk_pages(
         pages,
-        chunk_size=params["chunk_size"],
-        overlap=params["overlap"],
+        chunk_size=DEFAULT_CHUNK_SIZE,
+        overlap=DEFAULT_CHUNK_OVERLAP,
     )
 
     if not chunks_with_pages:
         raise ValueError("Fayldan matn ajratib bo'lmadi (bo'sh natija)")
 
-    return chunks_with_pages, params
-
+    return chunks_with_pages
 
 def _get_or_create_collection_name(bot):
     if bot.milvus_collection_name:
@@ -69,12 +65,6 @@ def _save_chunks_and_vectors(document, bot, chunks_with_pages, vectors, collecti
     insert_vectors(collection_name, milvus_entries)
 
 
-def _maybe_update_bot_top_k(bot, recommended_top_k):
-    if recommended_top_k > bot.default_top_k:
-        bot.default_top_k = recommended_top_k
-        bot.save(update_fields=["default_top_k"])
-
-
 def process_document(document):
     bot = document.bot
 
@@ -83,7 +73,7 @@ def process_document(document):
 
     try:
         tmp_path = _save_temp_file(document)
-        chunks_with_pages, params = _extract_and_chunk(tmp_path, document)
+        chunks_with_pages = _extract_and_chunk(tmp_path, document)
 
         chunk_texts = [text for text, _ in chunks_with_pages]
 
@@ -100,8 +90,6 @@ def process_document(document):
         document.status = "ready"
         document.chunk_count = len(chunks_with_pages)
         document.save(update_fields=["status", "chunk_count"])
-
-        _maybe_update_bot_top_k(bot, params["top_k"])
 
     except Exception as e:
         document.status = "failed"
