@@ -1,36 +1,35 @@
 from django.contrib import admin
-from django.contrib import messages
 from .models import Document, Chunk
-from .services.pipeline import process_document
 
 
 class ChunkInline(admin.TabularInline):
     model = Chunk
     extra = 0
-    readonly_fields = ['chunk_text', 'chunk_index', 'page_number', 'milvus_vector_id']
+    readonly_fields = ("chunk_index", "chunk_text", "page_number", "milvus_vector_id")
     can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    exclude = ['original_filename']
-    list_display = ['original_filename', 'bot', 'status', 'uploaded_at']
-    readonly_fields = ['status']
+    list_display = ("original_filename", "bot", "status", "chunk_count", "uploaded_at")
+    list_filter = ("status", "bot")
+    search_fields = ("original_filename",)
     inlines = [ChunkInline]
-    actions = ['process_selected_documents']
 
-    @admin.action(description="Tanlangan fayllarni qayta ishlash (Process)")
-    def process_selected_documents(self, request, queryset):
-        success_count = 0
-        for document in queryset:
-            try:
-                process_document(document)
-                success_count += 1
-            except Exception as e:
-                self.message_user(
-                    request,
-                    f"'{document.original_filename}' xato: {e}",
-                    level=messages.ERROR
-                )
-        if success_count:
-            self.message_user(request, f"{success_count} ta fayl muvaffaqiyatli qayta ishlandi.")
+    def get_fields(self, request, obj=None):
+        if obj is None:
+            return ("bot", "file")
+        return ("bot", "file", "original_filename", "status", "chunk_count", "uploaded_at")
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return ("original_filename", "status", "chunk_count", "uploaded_at")
+        return ()
+
+    def get_inline_instances(self, request, obj=None):
+        if obj is None:
+            return []
+        return super().get_inline_instances(request, obj)

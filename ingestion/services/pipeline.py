@@ -1,10 +1,9 @@
 import tempfile
 import os
-
 from ..models import Chunk
 from .parser import extract_text_with_pages
 from .chunker import chunk_pages
-from .embedder import get_embeddings_batch, get_embedding_model, EMBEDDING_DIMENSIONS
+from .embedder import get_embeddings_batch, get_embedding_model, EMBEDDING_DIMENSIONS, get_api_key
 from rag.services.milvus_client import ensure_collection, insert_vectors
 from rag.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
 
@@ -24,10 +23,13 @@ def _extract_and_chunk(tmp_path, document):
     finally:
         os.unlink(tmp_path)
 
+    bot = document.bot
+
     chunks_with_pages = chunk_pages(
         pages,
         chunk_size=DEFAULT_CHUNK_SIZE,
         overlap=DEFAULT_CHUNK_OVERLAP,
+        embedding_api_key=get_api_key(bot),
     )
 
     if not chunks_with_pages:
