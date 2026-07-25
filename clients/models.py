@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.text import slugify
+import secrets
 
 
 class Client(models.Model):
@@ -53,7 +54,10 @@ class Bot(models.Model):
     def __str__(self):
         return f"{self.name} ({self.client.name})"
 
+
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+        if self.website_enabled and not self.api_key:
+            self.api_key = secrets.token_urlsafe(32)
         super().save(*args, **kwargs)
