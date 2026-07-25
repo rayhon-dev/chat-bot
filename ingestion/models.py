@@ -1,5 +1,7 @@
 from django.db import models
 from clients.models import Bot
+from django.contrib.postgres.search import SearchVectorField
+from django.contrib.postgres.indexes import GinIndex
 
 
 class Document(models.Model):
@@ -29,6 +31,10 @@ class Chunk(models.Model):
     chunk_index = models.IntegerField()
     page_number = models.IntegerField(blank=True, null=True)
     milvus_vector_id = models.CharField(max_length=255)
+    search_vector = SearchVectorField(null=True, blank=True)
+
+    class Meta:
+        indexes = [GinIndex(fields=["search_vector"])]
 
     def __str__(self):
         return f"Chunk {self.chunk_index} of {self.document.original_filename}"

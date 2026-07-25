@@ -6,6 +6,7 @@ from .embedder import get_embeddings_batch, get_embedding_model, EMBEDDING_DIMEN
 from rag.services.milvus_client import ensure_collection, insert_vectors
 from ingestion.services.chunker import chunk_pages
 from rag.constants import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
+from django.contrib.postgres.search import SearchVector
 
 
 def _save_temp_file(document):
@@ -47,24 +48,28 @@ def _get_or_create_collection_name(bot):
     return collection_name
 
 
-def _save_chunks_and_vectors(document, bot, chunks_with_pages, vectors, collection_name):
-    starting_id = Chunk.objects.filter(document__bot=bot).count()
-
+def _save_chunks_and_vectors(document, chunks_with_pages, vectors, collection_name):
     milvus_entries = []
     for index, (chunk_text, page_number) in enumerate(chunks_with_pages):
-        vector_id = starting_id + index
-
-        Chunk.objects.create(
+        chunk = Chunk.objects.create(
             document=document,
             chunk_text=chunk_text,
             chunk_index=index,
             page_number=page_number,
-            milvus_vector_id=str(vector_id),
+            milvus_vector_id="",
         )
+        chunk.milvus_vector_id = str(chunk.id)
+        chunk.save(update_fields=["milvus_vector_id"])
 
-        milvus_entries.append({"id": vector_id, "vector": vectors[index]})
+        milvus_entries.append({"id": chunk.id, "vector": vectors[index]})
 
     insert_vectors(collection_name, milvus_entries)
+
+    Chunk.objects.filter(document=document).update(
+        search_vector=SearchVector("chunk_text", config="simple")
+    )
+
+
 
 
 def process_document(document):
@@ -87,7 +92,7 @@ def process_document(document):
 
         vectors = get_embeddings_batch(bot, chunk_texts, batch_size=100)
 
-        _save_chunks_and_vectors(document, bot, chunks_with_pages, vectors, collection_name)
+        _save_chunks_and_vectors(document, chunks_with_pages, vectors, collection_name)
 
         document.status = "ready"
         document.chunk_count = len(chunks_with_pages)

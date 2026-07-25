@@ -5,12 +5,12 @@ from langchain_openai import OpenAIEmbeddings
 
 
 STRICT_STRUCTURE_PATTERNS = {
-    "legal_article_uz": re.compile(r'(?=\n?\s*\d{1,4}\s*-\s*modda\.)', re.IGNORECASE),
-    "legal_article_ru": re.compile(r'(?=\n?\s*[Сс]татья\s+\d{1,4}\.)', re.IGNORECASE),
-    "legal_paragraph_uz": re.compile(r'(?=\n?\s*\d{1,4}\s*-\s*band\.)', re.IGNORECASE),
-    "chapter_uz_ru": re.compile(r'(?=\n?\s*(?:[Bb]ob|[Гг]лава)\s+\d+)'),
-    "chapter_en": re.compile(r'(?=\n?\s*Chapter\s+\d+)', re.IGNORECASE),
-    "contract_clause": re.compile(r'(?=\n?\s*\d{1,2}\.\d{1,2}\.\s)'),
+    "legal_article_uz": re.compile(r'\n(?=\s*\d{1,4}\s*-\s*modda\.)', re.IGNORECASE),
+    "legal_article_ru": re.compile(r'\n(?=\s*[Сс]татья\s+\d{1,4}\.)', re.IGNORECASE),
+    "legal_paragraph_uz": re.compile(r'\n(?=\s*\d{1,4}\s*-\s*band\.)', re.IGNORECASE),
+    "chapter_uz_ru": re.compile(r'\n(?=\s*(?:[Bb]ob|[Гг]лава)\s+\d+)'),
+    "chapter_en": re.compile(r'\n(?=\s*Chapter\s+\d+)', re.IGNORECASE),
+    "contract_clause": re.compile(r'\n(?=\s*\d{1,2}\.\d{1,2}\.\s)'),
 }
 
 

@@ -33,3 +33,12 @@ def search_vectors(collection_name, query_vector, top_k=10):
         data=[query_vector],
         limit=top_k
     )
+
+
+def delete_vectors(collection_name, ids):
+    if not ids:
+        return
+    client = get_client()
+    if not client.has_collection(collection_name=collection_name):
+        return
+    client.delete(collection_name=collection_name, ids=ids)
