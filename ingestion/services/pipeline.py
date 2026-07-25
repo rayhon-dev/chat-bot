@@ -2,10 +2,10 @@ import tempfile
 import os
 from ..models import Chunk
 from .parser import extract_text_with_pages
-from .chunker import chunk_pages
 from .embedder import get_embeddings_batch, get_embedding_model, EMBEDDING_DIMENSIONS, get_api_key
 from rag.services.milvus_client import ensure_collection, insert_vectors
-from rag.constants import DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP
+from ingestion.services.chunker import chunk_pages
+from rag.constants import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
 
 
 def _save_temp_file(document):

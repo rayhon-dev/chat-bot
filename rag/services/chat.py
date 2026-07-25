@@ -7,5 +7,5 @@ def get_bot_response(bot, question, relevance_criteria=None):
     if bot.uses_rag:
         chunks = retrieve_relevant_chunks(bot, question)
 
-    answer = generate_answer(bot, question, chunks, relevance_criteria=relevance_criteria)
-    return answer
+    answer, usage = generate_answer(bot, question, chunks, relevance_criteria=relevance_criteria)
+    return answer, usage

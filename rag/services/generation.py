@@ -11,9 +11,10 @@ def build_context(chunks):
         parts.append(f"[Manba: {source}]\n{chunk.chunk_text}")
     return "\n\n---\n\n".join(parts)
 
+
 PROVIDER_CONFIG = {
     "openai": {
-        "base_url": None,  # standart OpenAI
+        "base_url": None,
         "env_key": "PLATFORM_OPENAI_API_KEY",
     },
     "deepseek": {
@@ -21,7 +22,6 @@ PROVIDER_CONFIG = {
         "env_key": "DEEPSEEK_API_KEY",
     },
 }
-
 
 
 def get_llm_api_key(bot):
@@ -35,6 +35,7 @@ def get_llm_client(bot):
     config = PROVIDER_CONFIG.get(bot.llm_provider, PROVIDER_CONFIG["openai"])
     api_key = get_llm_api_key(bot)
     return OpenAI(api_key=api_key, base_url=config["base_url"])
+
 
 def generate_answer(bot, question, chunks, relevance_criteria=None):
     context = build_context(chunks)
@@ -55,7 +56,9 @@ def generate_answer(bot, question, chunks, relevance_criteria=None):
         )
     else:
         if bot.uses_rag:
-            return bot.fallback_message or "Kechirasiz, javob topa olmadim."
+            if relevance_criteria:
+                return None, None
+            return (bot.fallback_message or "Kechirasiz, javob topa olmadim."), None
         user_prompt = question + relevance_instruction
 
     client = get_llm_client(bot)
@@ -70,8 +73,13 @@ def generate_answer(bot, question, chunks, relevance_criteria=None):
     )
 
     answer = response.choices[0].message.content.strip()
+    usage = {
+        "prompt_tokens": response.usage.prompt_tokens,
+        "completion_tokens": response.usage.completion_tokens,
+        "total_tokens": response.usage.total_tokens,
+    }
 
     if answer == "SKIP":
-        return None
+        return None, usage
 
-    return answer
+    return answer, usage

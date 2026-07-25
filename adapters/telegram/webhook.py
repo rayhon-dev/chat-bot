@@ -101,10 +101,10 @@ def telegram_webhook(request, bot_id):
     criteria = bot.relevance_criteria if chat_type == "group" else None
 
     try:
-        answer = get_bot_response(bot, text, relevance_criteria=criteria)
+        answer, usage = get_bot_response(bot, text, relevance_criteria=criteria)
     except Exception as e:
         logger.exception(f"Bot javob berishda xato (bot_id={bot_id}): {e}")
-        answer = bot.fallback_message or "Kechirasiz, xatolik yuz berdi."
+        answer, usage = (bot.fallback_message or "Kechirasiz, xatolik yuz berdi."), None
 
     if answer is None:
         return JsonResponse({"ok": True})
@@ -113,6 +113,9 @@ def telegram_webhook(request, bot_id):
         conversation=conversation,
         sender=Message.Sender.BOT,
         content=answer,
+        prompt_tokens=usage["prompt_tokens"] if usage else None,
+        completion_tokens=usage["completion_tokens"] if usage else None,
+        total_tokens=usage["total_tokens"] if usage else None,
     )
 
     reply_id = message_id if chat_type == "group" else None

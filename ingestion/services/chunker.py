@@ -4,7 +4,6 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
 
 
-
 STRICT_STRUCTURE_PATTERNS = {
     "legal_article_uz": re.compile(r'(?=\n?\s*\d{1,4}\s*-\s*modda\.)', re.IGNORECASE),
     "legal_article_ru": re.compile(r'(?=\n?\s*[Сс]татья\s+\d{1,4}\.)', re.IGNORECASE),
@@ -16,7 +15,6 @@ STRICT_STRUCTURE_PATTERNS = {
 
 
 def detect_strict_pattern(text, sample_size=5000):
-
     sample = text[:sample_size]
     best_pattern_name = None
     best_count = 0
@@ -52,7 +50,6 @@ def _semantic_split(text, api_key):
 
 
 def chunk_text_smart(text, chunk_size=1000, overlap=150, embedding_api_key=None):
-
     detected = detect_strict_pattern(text)
 
     if detected:
