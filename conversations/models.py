@@ -31,3 +31,5 @@ class Message(models.Model):
     prompt_tokens = models.IntegerField(null=True, blank=True)
     completion_tokens = models.IntegerField(null=True, blank=True)
     total_tokens = models.IntegerField(null=True, blank=True)
+    model_used = models.CharField(max_length=100, blank=True, null=True)
+    cost_usd = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)

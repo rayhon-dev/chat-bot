@@ -116,6 +116,8 @@ def telegram_webhook(request, bot_id):
         prompt_tokens=usage["prompt_tokens"] if usage else None,
         completion_tokens=usage["completion_tokens"] if usage else None,
         total_tokens=usage["total_tokens"] if usage else None,
+        model_used=usage["model"] if usage else None,
+        cost_usd=usage["cost_usd"] if usage else None,
     )
 
     reply_id = message_id if chat_type == "group" else None

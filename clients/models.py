@@ -20,6 +20,7 @@ class Bot(models.Model):
         GEMINI = "gemini", "Gemini"
         ANTHROPIC = "anthropic", "Anthropic (Claude)"
         DEEPSEEK = "deepseek", "DeepSeek"
+        CLOUDAPI = "cloudapi", "CloudAPI.uz"
 
     class ApiKeySource(models.TextChoices):
         PLATFORM = "platform", "Platforma key"

@@ -2,6 +2,7 @@ import re
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 
 
 STRICT_STRUCTURE_PATTERNS = {
@@ -43,8 +44,22 @@ def _fallback_split(text, chunk_size, overlap):
     return splitter.split_text(text)
 
 
-def _semantic_split(text, api_key):
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=api_key)
+
+_local_embeddings = None
+
+
+def _get_local_embeddings():
+    global _local_embeddings
+    if _local_embeddings is None:
+        _local_embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-mpnet-base-v2")
+    return _local_embeddings
+
+
+def _semantic_split(text, api_key=None):
+    if api_key:
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=api_key)
+    else:
+        embeddings = _get_local_embeddings()
     splitter = SemanticChunker(embeddings, breakpoint_threshold_type="percentile")
     return splitter.split_text(text)
 

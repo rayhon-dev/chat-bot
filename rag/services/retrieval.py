@@ -9,29 +9,33 @@ CANDIDATE_K = 30
 FINAL_K = 6
 RRF_K = 60
 MIN_DENSE_SCORE = 0.42
-STOPWORDS = {"uchun", "bilan", "boʻyicha", "boyicha", "qanday", "necha", "kerak", "mumkin", "hisoblanadi"}
-
-
-def _build_keyword_query(query_text):
-    terms = [t for t in re.findall(r"\w+", query_text.lower()) if len(t) > 3 and t not in STOPWORDS]
-    if not terms:
-        return None
-    q = SearchQuery(terms[0], config="simple")
-    for t in terms[1:]:
-        q = q | SearchQuery(t, config="simple")
-    return q
 
 
 def _keyword_search(bot, query_text, limit=CANDIDATE_K):
-    q = _build_keyword_query(query_text)
-    if q is None:
+    words = [t for t in re.findall(r"\w+", query_text.lower()) if len(t) > 3]
+    if not words:
         return []
-    return list(
-        Chunk.objects
-        .filter(document__bot=bot, search_vector=q)
-        .annotate(rank=SearchRank("search_vector", q))
-        .order_by("-rank")[:limit]
-    )
+
+    words_sorted = sorted(set(words), key=len, reverse=True)
+    top_words = words_sorted[:4]
+
+    scores = {}
+    chunk_cache = {}
+    for word in top_words:
+        q = SearchQuery(word, config="simple")
+        results = (
+            Chunk.objects.filter(document__bot=bot, search_vector=q)
+            .annotate(rank=SearchRank("search_vector", q))
+            .order_by("-rank")[:limit]
+        )
+        for position, chunk in enumerate(results):
+            chunk_cache[chunk.id] = chunk
+            word_weight = len(word) ** 2
+            score = word_weight / (position + 1)
+            scores[chunk.id] = scores.get(chunk.id, 0) + score
+
+    ranked_ids = sorted(scores.keys(), key=lambda cid: scores[cid], reverse=True)
+    return [chunk_cache[cid] for cid in ranked_ids[:limit]]
 
 
 def _dense_search(bot, query_text, limit=CANDIDATE_K):
