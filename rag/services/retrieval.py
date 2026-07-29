@@ -1,6 +1,6 @@
 import re
 from django.contrib.postgres.search import SearchQuery, SearchRank
-
+from django.db.models import F
 from ingestion.models import Chunk
 from ingestion.services.embedder import get_embeddings_batch
 from .milvus_client import search_vectors
@@ -19,23 +19,22 @@ def _keyword_search(bot, query_text, limit=CANDIDATE_K):
     words_sorted = sorted(set(words), key=len, reverse=True)
     top_words = words_sorted[:4]
 
-    scores = {}
-    chunk_cache = {}
-    for word in top_words:
-        q = SearchQuery(word, config="simple")
-        results = (
-            Chunk.objects.filter(document__bot=bot, search_vector=q)
-            .annotate(rank=SearchRank("search_vector", q))
-            .order_by("-rank")[:limit]
-        )
-        for position, chunk in enumerate(results):
-            chunk_cache[chunk.id] = chunk
-            word_weight = len(word) ** 2
-            score = word_weight / (position + 1)
-            scores[chunk.id] = scores.get(chunk.id, 0) + score
+    qs = Chunk.objects.filter(document__bot=bot)
+    combined_score = None
 
-    ranked_ids = sorted(scores.keys(), key=lambda cid: scores[cid], reverse=True)
-    return [chunk_cache[cid] for cid in ranked_ids[:limit]]
+    for i, word in enumerate(top_words):
+        field_name = f"rank_{i}"
+        q = SearchQuery(word, config="simple")
+        qs = qs.annotate(**{field_name: SearchRank(F("search_vector"), q)})
+        weighted_term = F(field_name) * (len(word) ** 2)
+        combined_score = weighted_term if combined_score is None else combined_score + weighted_term
+
+    qs = (
+        qs.annotate(combined_score=combined_score)
+        .filter(combined_score__gt=0)
+        .order_by("-combined_score")[:limit]
+    )
+    return list(qs)
 
 
 def _dense_search(bot, query_text, limit=CANDIDATE_K):
@@ -74,10 +73,19 @@ def retrieve_relevant_chunks(bot, query_text, top_k=None):
     if not merged_ids:
         return []
 
-    chunks = Chunk.objects.filter(
-        document__bot=bot, milvus_vector_id__in=merged_ids
-    ).select_related("document")
-    by_id = {c.milvus_vector_id: c for c in chunks}
+    # Keyword natijalaridan allaqachon bor obyektlarni qayta ishlatamiz
+    by_id = {c.milvus_vector_id: c for c in keyword_chunks}
+
+    # Faqat KEYWORD'da bo'lmagan (ya'ni faqat dense'dan kelgan) ID'lar uchun
+    # qo'shimcha so'rov qilamiz
+    missing_ids = [cid for cid in merged_ids if cid not in by_id]
+    if missing_ids:
+        extra_chunks = Chunk.objects.filter(
+            document__bot=bot, milvus_vector_id__in=missing_ids
+        ).select_related("document")
+        for c in extra_chunks:
+            by_id[c.milvus_vector_id] = c
+
     ordered = [by_id[cid] for cid in merged_ids if cid in by_id]
 
     print(f"\n--- SAVOL: {query_text} ---")

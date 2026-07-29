@@ -65,8 +65,17 @@ def _call_cloudapi_direct(bot, model_name, system_prompt, user_prompt):
 
 
 def generate_answer(bot, question, chunks, relevance_criteria=None):
+    FORMATTING_RULES = """
+    
+    FORMATLASH QOIDALARI (har doim rioya qiling):
+    - Formulalarni LaTeX belgilarisiz (\\[ \\], $$, \\( \\) ishlatmasdan), oddiy matn ko'rinishida yoz. Masalan: "GDP = C + I + G + (X - M)" deb yoz.
+    - Markdown belgilarini (**, ###, ---) ishlatma — oddiy, sodda matn yoz.
+    - Har bir yangi fikr yoki ro'yxat elementini yangi qatordan boshla.
+    - Ro'yxatlarda har bir band uchun raqam yoki chiziqcha qo'yib, alohida qatorga yoz.
+    """
+
     context = build_context(chunks)
-    system_prompt = bot.system_prompt or "Siz yordamchi botsiz."
+    system_prompt = (bot.system_prompt or "Siz yordamchi botsiz.") + FORMATTING_RULES
 
     relevance_instruction = ""
     if relevance_criteria:
