@@ -57,10 +57,10 @@ def _semantic_split(text, api_key=None):
 
 
 def chunk_text_smart(text, chunk_size=1000, overlap=150, embedding_api_key=None):
-    detected = detect_strict_pattern(text)
+    detected = detect_dynamic_structure_word(text)
 
     if detected:
-        pattern = STRICT_STRUCTURE_PATTERNS[detected]
+        pattern = GENERIC_NUMBERED_UNIT_PATTERN[detected]
         sections = split_by_structure(text, pattern)
         if len(sections) > 1:
             result = []
