@@ -3,32 +3,24 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
+from collections import Counter
 
 
-STRICT_STRUCTURE_PATTERNS = {
-    "legal_article_uz": re.compile(r'\n(?=\s*\d{1,4}\s*-\s*modda\.)', re.IGNORECASE),
-    "legal_article_ru": re.compile(r'\n(?=\s*[Сс]татья\s+\d{1,4}\.)', re.IGNORECASE),
-    "legal_paragraph_uz": re.compile(r'\n(?=\s*\d{1,4}\s*-\s*band\.)', re.IGNORECASE),
-    "chapter_uz_ru": re.compile(r'\n(?=\s*(?:[Bb]ob|[Гг]лава)\s+\d+)'),
-    "chapter_en": re.compile(r'\n(?=\s*Chapter\s+\d+)', re.IGNORECASE),
-    "contract_clause": re.compile(r'\n(?=\s*\d{1,2}\.\d{1,2}\.\s)'),
-}
+GENERIC_NUMBERED_UNIT_PATTERN = re.compile(
+    r'\n\s*(\d{1,4})\s*[-.]?\s*([A-Za-zА-Яа-яЎўҚқҒғҲҳʻʼ]{3,20})\.',
+    re.IGNORECASE
+)
 
-
-def detect_strict_pattern(text, sample_size=5000):
+def detect_dynamic_structure_word(text, sample_size=15000):
     sample = text[:sample_size]
-    best_pattern_name = None
-    best_count = 0
-
-    for name, pattern in STRICT_STRUCTURE_PATTERNS.items():
-        count = len(pattern.findall(sample))
-        if count > best_count:
-            best_count = count
-            best_pattern_name = name
-
-    if best_count < 2:
+    matches = GENERIC_NUMBERED_UNIT_PATTERN.findall(sample)
+    if len(matches) < 3:
         return None
-    return best_pattern_name
+    word_counts = Counter(word.lower() for _, word in matches)
+    most_common_word, count = word_counts.most_common(1)[0]
+    if count < 3:
+        return None
+    return most_common_word
 
 
 def split_by_structure(text, pattern):
