@@ -4,6 +4,9 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from collections import Counter
+import os
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 
 GENERIC_NUMBERED_UNIT_PATTERN = re.compile(
@@ -21,6 +24,11 @@ def detect_dynamic_structure_word(text, sample_size=15000):
     if count < 3:
         return None
     return most_common_word
+
+
+def build_dynamic_pattern(structure_word):
+    escaped_word = re.escape(structure_word)
+    return re.compile(rf'\n(?=\s*\d{{1,4}}\s*[-.]?\s*{escaped_word}\.)', re.IGNORECASE)
 
 
 def split_by_structure(text, pattern):
@@ -60,7 +68,7 @@ def chunk_text_smart(text, chunk_size=1000, overlap=150, embedding_api_key=None)
     detected = detect_dynamic_structure_word(text)
 
     if detected:
-        pattern = GENERIC_NUMBERED_UNIT_PATTERN[detected]
+        pattern = build_dynamic_pattern(detected)
         sections = split_by_structure(text, pattern)
         if len(sections) > 1:
             result = []

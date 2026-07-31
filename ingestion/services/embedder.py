@@ -1,6 +1,10 @@
 import os
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
+from google import genai as google_genai
+
 
 _local_model = None
 LOCAL_MODEL_NAME = "paraphrase-multilingual-mpnet-base-v2"
@@ -11,6 +15,7 @@ EMBEDDING_DIMENSIONS = {
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
     "local": LOCAL_DIMENSION,
+    "gemini": 3072,
 }
 
 
@@ -31,9 +36,34 @@ def get_embeddings_batch_local(texts, batch_size=64):
     return all_vectors
 
 
+_gemini_client = None
+
+
+def get_gemini_client():
+    global _gemini_client
+    if _gemini_client is None:
+        _gemini_client = google_genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    return _gemini_client
+
+
+def get_embeddings_batch_gemini(bot, texts, batch_size=100):
+    client = get_gemini_client()
+    all_embeddings = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        result = client.models.embed_content(
+            model="models/gemini-embedding-001",
+            contents=batch
+        )
+        all_embeddings.extend([e.values for e in result.embeddings])
+    return all_embeddings
+
+
 def get_api_key(bot):
     if bot.embedding_model == "local":
         return None
+    if bot.embedding_model == "gemini":
+        return os.getenv("GEMINI_API_KEY")
     if bot.api_key_source == "client":
         if not bot.client_api_key:
             raise ValueError(f"Bot '{bot.name}' uchun client_api_key kiritilmagan")
@@ -48,6 +78,8 @@ def get_embedding_model(bot):
 def get_embeddings_batch(bot, texts, batch_size=100):
     if bot.embedding_model == "local":
         return get_embeddings_batch_local(texts, batch_size=batch_size)
+    if bot.embedding_model == "gemini":
+        return get_embeddings_batch_gemini(bot, texts, batch_size=batch_size)
 
     api_key = get_api_key(bot)
     model = get_embedding_model(bot)

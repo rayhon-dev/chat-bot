@@ -26,6 +26,12 @@ class Bot(models.Model):
         PLATFORM = "platform", "Platforma key"
         CLIENT = "client", "Client o'z key'ini kiritadi"
 
+    class EmbeddingProvider(models.TextChoices):
+        LOCAL = "local", "Local (bepul, sentence-transformers)"
+        OPENAI_SMALL = "text-embedding-3-small", "OpenAI text-embedding-3-small"
+        OPENAI_LARGE = "text-embedding-3-large", "OpenAI text-embedding-3-large"
+        GEMINI = "gemini", "Google Gemini (gemini-embedding-001)"
+
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="bots")
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
@@ -44,8 +50,14 @@ class Bot(models.Model):
     client_api_key = models.CharField(max_length=255, blank=True, null=True)
     llm_provider = models.CharField(max_length=20, choices=LLMProvider.choices, default=LLMProvider.OPENAI)
     llm_model = models.CharField(max_length=100, blank=True, null=True)
-    embedding_model = models.CharField(max_length=100, blank=True, null=True)
+    embedding_model = models.CharField(
+        max_length=100,
+        choices=EmbeddingProvider.choices,
+        default=EmbeddingProvider.LOCAL,
+        blank=True,
+    )
     milvus_collection_name = models.CharField(max_length=255, blank=True, null=True)
+    term_frequencies = models.JSONField(default=dict, blank=True)
     temperature = models.FloatField(default=0.7)
     system_prompt = models.TextField(blank=True)
     welcome_message = models.CharField(max_length=500, blank=True)

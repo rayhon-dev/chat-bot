@@ -3,11 +3,8 @@ from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, Te
 
 
 def clean_extracted_text(text):
-    """
-    PDF/DOCX'dan kelgan shovqinni tozalaydi:
-    - Yolg'iz turgan raqamlar (sahifa raqami)
-    - Ortiqcha bo'sh qatorlar
-    """
+    text = re.sub(r'(\w+)-\n(\w+)', r'\1\2', text)
+
     lines = text.split('\n')
     cleaned_lines = []
     for line in lines:

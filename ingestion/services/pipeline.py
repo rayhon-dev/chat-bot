@@ -7,6 +7,8 @@ from rag.services.milvus_client import ensure_collection, insert_vectors
 from ingestion.services.chunker import chunk_pages
 from rag.constants import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
 from django.contrib.postgres.search import SearchVector
+from collections import Counter
+import re
 
 
 def _save_temp_file(document):
@@ -81,6 +83,32 @@ def _save_chunks_and_vectors(document, chunks_with_pages, vectors, collection_na
     )
 
 
+def _compute_and_save_term_frequencies(bot):
+
+    #Botning barcha chunklari bo'yicha, har bir so'zning necha foiz
+    #chunkda uchrashini hisoblaydi. Bir marta, ingestion paytida ishlaydi.
+
+    all_chunks_text = list(
+        Chunk.objects.filter(document__bot=bot).values_list("chunk_text", flat=True)
+    )
+    total_chunks = len(all_chunks_text)
+    if total_chunks == 0:
+        return
+
+    doc_freq = Counter()
+    for text in all_chunks_text:
+        words_in_chunk = set(re.findall(r"[\w'ʻʼ‘’]+", text.lower()))
+        doc_freq.update(words_in_chunk)
+
+    term_frequencies = {
+        word: round(count / total_chunks, 4)
+        for word, count in doc_freq.items()
+        if not word.isdigit() and count >= 2
+    }
+
+    bot.term_frequencies = term_frequencies
+    bot.save(update_fields=["term_frequencies"])
+
 
 def process_document(document):
     bot = document.bot
@@ -116,6 +144,8 @@ def process_document(document):
         vectors = get_embeddings_batch(bot, chunk_texts, batch_size=100)
 
         _save_chunks_and_vectors(document, chunks_with_pages, vectors, collection_name)
+
+        _compute_and_save_term_frequencies(bot)
 
         document.status = "ready"
         document.chunk_count = len(chunks_with_pages)

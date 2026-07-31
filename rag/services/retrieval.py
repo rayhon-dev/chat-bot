@@ -12,11 +12,18 @@ MIN_DENSE_SCORE = 0.42
 
 
 def _keyword_search(bot, query_text, limit=CANDIDATE_K):
-    words = [t for t in re.findall(r"\w+", query_text.lower()) if len(t) > 3]
+    words = [t for t in re.findall(r"[\w'ʻʼ‘’]+", query_text.lower()) if len(t) > 2]
     if not words:
         return []
 
-    words_sorted = sorted(set(words), key=len, reverse=True)
+    term_freq = bot.term_frequencies or {}
+
+    def rarity_score(word):
+        freq = term_freq.get(word, 1.0)
+        return 1.0 / (freq + 0.01)
+
+    unique_words = list(set(words))
+    words_sorted = sorted(unique_words, key=rarity_score, reverse=True)
     top_words = words_sorted[:4]
 
     qs = Chunk.objects.filter(document__bot=bot)
@@ -26,7 +33,8 @@ def _keyword_search(bot, query_text, limit=CANDIDATE_K):
         field_name = f"rank_{i}"
         q = SearchQuery(word, config="simple")
         qs = qs.annotate(**{field_name: SearchRank(F("search_vector"), q)})
-        weighted_term = F(field_name) * (len(word) ** 2)
+        weight = rarity_score(word)
+        weighted_term = F(field_name) * weight
         combined_score = weighted_term if combined_score is None else combined_score + weighted_term
 
     qs = (

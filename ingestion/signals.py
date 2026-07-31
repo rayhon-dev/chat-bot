@@ -1,10 +1,7 @@
 import logging
-
 from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
-
 from .models import Document
-from .services.pipeline import process_document
 from rag.services.milvus_client import delete_vectors
 
 logger = logging.getLogger(__name__)
@@ -13,10 +10,8 @@ logger = logging.getLogger(__name__)
 @receiver(post_save, sender=Document)
 def trigger_processing_on_upload(sender, instance, created, **kwargs):
     if created and instance.status == "pending":
-        try:
-            process_document(instance)
-        except Exception:
-            logger.exception(f"Hujjatni qayta ishlashda xato (document_id={instance.id})")
+        from .tasks import process_document_task
+        process_document_task.delay(instance.id)
 
 
 @receiver(pre_delete, sender=Document)
@@ -37,3 +32,6 @@ def _cleanup_vectors_after_delete(sender, instance, **kwargs):
         delete_vectors(collection_name, [int(v) for v in vector_ids])
     except Exception:
         logger.exception(f"Milvus vektorlarni o'chirishda xato (document_id={instance.id})")
+
+
+
