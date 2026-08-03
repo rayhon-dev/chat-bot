@@ -1,6 +1,5 @@
 import logging
 import re
-from typing import List
 from deep_translator import GoogleTranslator
 from langdetect import detect, LangDetectException
 from django.contrib.postgres.search import SearchQuery
@@ -8,11 +7,14 @@ from ingestion.models import Chunk
 from ingestion.services.embedder import get_embeddings_batch
 from .milvus_client import search_vectors
 from chatbot_project.settings import CANDIDATE_K, FINAL_K, RRF_K
+from langfuse.decorators import observe, langfuse_context
+
 logger = logging.getLogger(__name__)
 
 MIN_DENSE_SCORE = 0.42
 
 
+@observe(name="Smart_Translate")
 def smart_translate(text: str, target_lang: str = "en") -> str:
 
     if not target_lang:
@@ -41,7 +43,7 @@ def smart_translate(text: str, target_lang: str = "en") -> str:
         logger.warning(f"Translation failed: {e}. Returning raw text.")
         return text
 
-
+@observe(name="Keyword_Search")
 def _keyword_search(bot, query_text, limit=CANDIDATE_K):
     words = [t for t in re.findall(r"[\w'ʻʼ‘’]+", query_text.lower()) if len(t) > 2]
     if not words:
@@ -74,6 +76,7 @@ def _keyword_search(bot, query_text, limit=CANDIDATE_K):
     return list(qs)
 
 
+@observe(name="Dense_Search")
 def _dense_search(bot, query_text, limit=CANDIDATE_K):
     query_vector = get_embeddings_batch(bot, [query_text], batch_size=1)[0]
     results = search_vectors(bot.milvus_collection_name, query_vector, top_k=limit)
@@ -97,6 +100,7 @@ def _rrf_merge(dense_ids, keyword_ids, final_k):
     return [cid for cid, _ in ranked[:final_k]]
 
 
+@observe(name="RAG_Retrieve_Chunks")
 def retrieve_relevant_chunks(bot, query_text, top_k=None):
     if not bot.milvus_collection_name:
         return []
@@ -109,6 +113,21 @@ def retrieve_relevant_chunks(bot, query_text, top_k=None):
     dense_ids, best_dense_score = _dense_search(bot, translated_query)
     keyword_chunks = _keyword_search(bot, translated_query)
     keyword_ids = [c.milvus_vector_id for c in keyword_chunks]
+
+    langfuse_context.update_current_observation(
+        input={
+            "query_text": query_text,
+            "translated_query": translated_query,
+            "target_language": target_language
+        },
+        metadata={
+            "bot_id": bot.id,
+            "dense_count": len(dense_ids),
+            "keyword_count": len(keyword_ids),
+            "best_dense_score": float(best_dense_score),
+            "min_dense_score_threshold": MIN_DENSE_SCORE,
+        }
+    )
 
     if not dense_ids and not keyword_ids:
         return []

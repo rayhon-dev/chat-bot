@@ -2,8 +2,10 @@ from openai import OpenAI
 import requests
 import os
 from .pricing import calculate_cost
+from langfuse.decorators import observe, langfuse_context # type: ignore
 
 
+@observe(name="Build_Context")
 def build_context(chunks):
     if not chunks:
         return ""
@@ -33,6 +35,7 @@ def get_llm_client(bot):
     return OpenAI(api_key=api_key, base_url=config["base_url"])
 
 
+@observe(name="CloudAPI_Direct_Call")
 def _call_cloudapi_direct(bot, model_name, system_prompt, user_prompt):
 
     api_key = get_llm_api_key(bot)
@@ -63,7 +66,7 @@ def _call_cloudapi_direct(bot, model_name, system_prompt, user_prompt):
     }
     return answer, usage
 
-
+@observe(name="RAG_Generate_Answer")
 def generate_answer(bot, question, chunks, relevance_criteria=None):
     LANGUAGE_RULE = """
 
@@ -127,6 +130,19 @@ def generate_answer(bot, question, chunks, relevance_criteria=None):
             "model": model_name,
             "cost_usd": calculate_cost(model_name, response.usage.prompt_tokens, response.usage.completion_tokens),
         }
+
+    if usage:
+        langfuse_context.update_current_observation(
+            usage={
+                "input": usage["prompt_tokens"],
+                "output": usage["completion_tokens"],
+                "total": usage["total_tokens"],
+                "unit": "TOKENS",
+            },
+            metadata={
+                "calculated_cost_usd": usage["cost_usd"]
+            }
+        )
 
     if answer == "SKIP":
         return None, usage
