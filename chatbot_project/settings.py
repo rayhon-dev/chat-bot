@@ -158,3 +158,9 @@ CACHES = {
         'LOCATION': 'redis://localhost:6379/1',
     }
 }
+
+
+CANDIDATE_K = 30
+FINAL_K = 4
+RRF_K = 60
+

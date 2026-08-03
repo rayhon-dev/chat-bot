@@ -1,14 +1,45 @@
+import logging
 import re
-from django.contrib.postgres.search import SearchQuery, SearchRank
-from django.db.models import F
+from typing import List
+from deep_translator import GoogleTranslator
+from langdetect import detect, LangDetectException
+from django.contrib.postgres.search import SearchQuery
 from ingestion.models import Chunk
 from ingestion.services.embedder import get_embeddings_batch
 from .milvus_client import search_vectors
+from chatbot_project.settings import CANDIDATE_K, FINAL_K, RRF_K
+logger = logging.getLogger(__name__)
 
-CANDIDATE_K = 30
-FINAL_K = 6
-RRF_K = 60
 MIN_DENSE_SCORE = 0.42
+
+
+def smart_translate(text: str, target_lang: str = "en") -> str:
+
+    if not target_lang:
+        target_lang = "en"
+
+    target_lang = target_lang.lower()
+
+    try:
+        detected_lang = detect(text)
+        logger.info(f"Detected language: '{detected_lang}', Target language: '{target_lang}'")
+
+        # Savol va fayl tili bir xil bo'lsa tarjima qilmaymiz
+        if detected_lang == target_lang:
+            logger.info(f"Savol va fayl tili bir xil ({detected_lang}). Tarjima qilinmadi.")
+            return text
+
+        # Tillar har xil bo'lsa tarjima qilamiz
+        translated = GoogleTranslator(source='auto', target=target_lang).translate(text)
+        logger.info(f"Savol ({detected_lang}) -> Fayl tiliga ({target_lang}) tarjima qilindi: '{translated}'")
+        return translated
+
+    except LangDetectException:
+        logger.warning("Language detection failed. Returning raw text.")
+        return text
+    except Exception as e:
+        logger.warning(f"Translation failed: {e}. Returning raw text.")
+        return text
 
 
 def _keyword_search(bot, query_text, limit=CANDIDATE_K):
@@ -25,23 +56,21 @@ def _keyword_search(bot, query_text, limit=CANDIDATE_K):
     unique_words = list(set(words))
     words_sorted = sorted(unique_words, key=rarity_score, reverse=True)
     top_words = words_sorted[:4]
+    if not top_words:
+        return []
 
-    qs = Chunk.objects.filter(document__bot=bot)
-    combined_score = None
-
-    for i, word in enumerate(top_words):
-        field_name = f"rank_{i}"
-        q = SearchQuery(word, config="simple")
-        qs = qs.annotate(**{field_name: SearchRank(F("search_vector"), q)})
-        weight = rarity_score(word)
-        weighted_term = F(field_name) * weight
-        combined_score = weighted_term if combined_score is None else combined_score + weighted_term
+    query_expression = SearchQuery(top_words[0], config="simple")
+    for word in top_words[1:]:
+        query_expression |= SearchQuery(word, config="simple")
 
     qs = (
-        qs.annotate(combined_score=combined_score)
-        .filter(combined_score__gt=0)
-        .order_by("-combined_score")[:limit]
+        Chunk.objects.filter(
+            document__bot=bot,
+            search_vector=query_expression
+        )
+        .select_related("document")[:limit]
     )
+
     return list(qs)
 
 
@@ -51,7 +80,11 @@ def _dense_search(bot, query_text, limit=CANDIDATE_K):
     if not results or not results[0]:
         return [], 0.0
     hits = results[0]
-    return [str(h["id"]) for h in hits], hits[0]["distance"]
+    best_score = hits[0]["distance"] if hits else 0.0
+
+    valid_hits = [h for h in hits if h.get("distance", 0.0) >= MIN_DENSE_SCORE]
+
+    return [str(h["id"]) for h in valid_hits], best_score
 
 
 def _rrf_merge(dense_ids, keyword_ids, final_k):
@@ -70,11 +103,14 @@ def retrieve_relevant_chunks(bot, query_text, top_k=None):
 
     final_k = top_k or FINAL_K
 
-    dense_ids, best_dense_score = _dense_search(bot, query_text)
-    keyword_chunks = _keyword_search(bot, query_text)
+    target_language = getattr(bot, "language", "en") or "en"
+    translated_query = smart_translate(query_text, target_lang=target_language)
+
+    dense_ids, best_dense_score = _dense_search(bot, translated_query)
+    keyword_chunks = _keyword_search(bot, translated_query)
     keyword_ids = [c.milvus_vector_id for c in keyword_chunks]
 
-    if best_dense_score < MIN_DENSE_SCORE and not keyword_ids:
+    if not dense_ids and not keyword_ids:
         return []
 
     merged_ids = _rrf_merge(dense_ids, keyword_ids, final_k)

@@ -65,6 +65,13 @@ def _call_cloudapi_direct(bot, model_name, system_prompt, user_prompt):
 
 
 def generate_answer(bot, question, chunks, relevance_criteria=None):
+    LANGUAGE_RULE = """
+
+        QAT'IY TIL QOIDASI:
+        - Savol va manba (ma'lumotlar) qaysi tilda (ingliz, rus va b.) bo'lishidan qat'i nazar, siz HAR DOIM VA FAQAT O'ZBEK TILIDA javob berishingiz shart!
+        - Boshqa tillarda javob berish mutlaqo taqiqlanadi.
+        """
+
     FORMATTING_RULES = """
     
     FORMATLASH QOIDALARI (har doim rioya qiling):
@@ -75,7 +82,8 @@ def generate_answer(bot, question, chunks, relevance_criteria=None):
     """
 
     context = build_context(chunks)
-    system_prompt = (bot.system_prompt or "Siz yordamchi botsiz.") + FORMATTING_RULES
+    base_prompt = bot.system_prompt or "Siz yordamchi botsiz."
+    system_prompt = base_prompt + LANGUAGE_RULE + FORMATTING_RULES
 
     relevance_instruction = ""
     if relevance_criteria:

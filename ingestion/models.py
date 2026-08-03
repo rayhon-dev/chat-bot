@@ -11,9 +11,21 @@ class Document(models.Model):
         READY = "ready", "Tayyor"
         FAILED = "failed", "Xato"
 
+    LANGUAGE_CHOICES = [
+        ('en', 'English'),
+        ('uz', 'Oʻzbekcha'),
+        ('ru', 'Русский'),
+    ]
+
     bot = models.ForeignKey(Bot, on_delete=models.CASCADE, related_name="documents")
     file = models.FileField(upload_to="uploads/")
     original_filename = models.CharField(max_length=255, blank=True)
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        default='en',
+        help_text="Botga yuklangan hujjatlar va javoblar tili"
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     chunk_count = models.IntegerField(null=True, blank=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
