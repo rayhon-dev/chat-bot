@@ -7,8 +7,7 @@ from ingestion.models import Chunk
 from ingestion.services.embedder import get_embeddings_batch
 from .milvus_client import search_vectors
 from chatbot_project.settings import CANDIDATE_K, FINAL_K, RRF_K
-from langfuse.decorators import observe, langfuse_context
-
+from langfuse import observe, get_client
 logger = logging.getLogger(__name__)
 
 MIN_DENSE_SCORE = 0.42
@@ -114,7 +113,7 @@ def retrieve_relevant_chunks(bot, query_text, top_k=None):
     keyword_chunks = _keyword_search(bot, translated_query)
     keyword_ids = [c.milvus_vector_id for c in keyword_chunks]
 
-    langfuse_context.update_current_observation(
+    get_client().update_current_span(
         input={
             "query_text": query_text,
             "translated_query": translated_query,

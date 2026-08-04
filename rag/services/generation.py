@@ -2,7 +2,7 @@ from openai import OpenAI
 import requests
 import os
 from .pricing import calculate_cost
-from langfuse.decorators import observe, langfuse_context # type: ignore
+from langfuse import observe, get_client
 
 
 @observe(name="Build_Context")
@@ -66,7 +66,7 @@ def _call_cloudapi_direct(bot, model_name, system_prompt, user_prompt):
     }
     return answer, usage
 
-@observe(name="RAG_Generate_Answer")
+@observe(name="RAG_Generate_Answer", as_type="generation")
 def generate_answer(bot, question, chunks, relevance_criteria=None):
     LANGUAGE_RULE = """
 
@@ -132,12 +132,15 @@ def generate_answer(bot, question, chunks, relevance_criteria=None):
         }
 
     if usage:
-        langfuse_context.update_current_observation(
-            usage={
+        get_client().update_current_generation(
+            model=usage["model"],
+            usage_details={
                 "input": usage["prompt_tokens"],
                 "output": usage["completion_tokens"],
                 "total": usage["total_tokens"],
-                "unit": "TOKENS",
+            },
+            cost_details={
+                "total": usage["cost_usd"]
             },
             metadata={
                 "calculated_cost_usd": usage["cost_usd"]
