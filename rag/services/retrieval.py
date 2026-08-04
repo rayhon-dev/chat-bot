@@ -2,8 +2,8 @@ import logging
 import re
 from deep_translator import GoogleTranslator
 from langdetect import detect, LangDetectException
-from django.contrib.postgres.search import SearchQuery
-from ingestion.models import Chunk
+from django.contrib.postgres.search import SearchQuery, SearchRank
+from ingestion.models import Chunk, Document
 from ingestion.services.embedder import get_embeddings_batch
 from .milvus_client import search_vectors
 from chatbot_project.settings import CANDIDATE_K, FINAL_K, RRF_K
@@ -56,7 +56,7 @@ def _keyword_search(bot, query_text, limit=CANDIDATE_K):
 
     unique_words = list(set(words))
     words_sorted = sorted(unique_words, key=rarity_score, reverse=True)
-    top_words = words_sorted[:4]
+    top_words = words_sorted[:5]
     if not top_words:
         return []
 
@@ -64,15 +64,22 @@ def _keyword_search(bot, query_text, limit=CANDIDATE_K):
     for word in top_words[1:]:
         query_expression |= SearchQuery(word, config="simple")
 
-    qs = (
-        Chunk.objects.filter(
-            document__bot=bot,
-            search_vector=query_expression
-        )
-        .select_related("document")[:limit]
+    # 1-bosqich: Postgres orqali kengroq kandidatlar to'plamini olamiz (masalan 2x limit)
+    candidates = list(
+        Chunk.objects.filter(document__bot=bot, search_vector=query_expression)
+        .annotate(rank=SearchRank("search_vector", query_expression))
+        .only("id", "chunk_text", "milvus_vector_id")
+        .order_by("-rank")[: limit * 2]
     )
 
-    return list(qs)
+    # 2-bosqich: sizning IDF (rarity_score) asosida qayta ballaymiz — DB'ga qo'shimcha so'rovsiz,
+    # chunki candidates allaqachon xotirada
+    def idf_boost(chunk):
+        text_lower = chunk.chunk_text.lower()
+        return sum(rarity_score(w) for w in top_words if w in text_lower)
+
+    candidates.sort(key=idf_boost, reverse=True)
+    return candidates[:limit]
 
 
 @observe(name="Dense_Search")
@@ -106,7 +113,12 @@ def retrieve_relevant_chunks(bot, query_text, top_k=None):
 
     final_k = top_k or FINAL_K
 
-    target_language = getattr(bot, "language", "en") or "en"
+    document_language = (
+        Document.objects.filter(bot=bot)
+        .values_list("language", flat=True)
+        .first()
+    )
+    target_language = document_language or "en"
     translated_query = smart_translate(query_text, target_lang=target_language)
 
     dense_ids, best_dense_score = _dense_search(bot, translated_query)
